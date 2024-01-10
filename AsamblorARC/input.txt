@@ -1,0 +1,12 @@
+﻿! This program adds 2 numbers
+		.begin
+		.org 2024
+progl:	ld		[x],	%r1
+		ld		[y],	%r2
+		addcc	%r1,	%r2,	%r3
+		st		%r3,	[z]
+		jmpl	%r15	+	4,	%r0
+x:		15
+y:		9
+z:		0
+		.end

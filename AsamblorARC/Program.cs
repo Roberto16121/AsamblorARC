@@ -1,4 +1,6 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 /// <summary>
 /// creez tabelul de simboluri si le daug valoarea dupa ce le citesc
 /// urmeaza inca un parsing 
@@ -52,12 +54,7 @@ class Program
             }
         }
 
-
-        foreach(string token in symbols.Keys)
-        {
-            Console.WriteLine(token + " " + symbols[token]);
-        }
-
+        StreamWriter writer = new("Output.txt");
         foreach (var code in linesOfCode)
         {
             if(!code.line.Contains("."))
@@ -66,18 +63,46 @@ class Program
                 if(code.line.Contains(":")) line = Regex.Replace(line, @"\w+:\s*", "");
                 Regex regex = new(@",*\s+");
                 string[] parts = regex.Split(line).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
-                foreach(var item in parts)
-                {
-                    Console.Write(item + " ");
-                }
-                Console.WriteLine();
-                string binaryCode = ConvertToBinary(parts, code.number);
-                    
+                string binaryCode = ConvertToBinary(parts, code.number);  
+                writer.WriteLine(AddSpaceToBinary(binaryCode));
                 
             }
+            else
+            {
+                Regex rex = new Regex(@",*\s+");
+                string[] parts = rex.Split(code.line);
+
+                if (parts.Contains(".org"))
+                {
+                    int nr = 0;
+                    if (int.TryParse(parts[1], out nr))
+                        locationStart = nr;
+                    else if (symbols.TryGetValue(parts[1], out nr))
+                        locationStart = nr;
+                }
+
+                if (parts.Contains(".end"))
+                {
+                    break;
+                }
+            }
         }
+        Console.WriteLine("Codul tradus se afla : {0}", Path.GetFullPath("Output.txt"));
+        writer.Close();
+        
 
+    }
 
+    static string AddSpaceToBinary(string binary)
+    {
+        StringBuilder res = new();
+        for(int i = 0; i < binary.Length; i++)
+        {
+            res.Append(binary[i]);
+            if((i+1) % 8 == 0 && i + 1 <  binary.Length)
+                res.Append(' ');
+        }
+        return res.ToString();
     }
 
     private static string ConvertToBinary(string[] parts, int lineNr)
@@ -86,6 +111,7 @@ class Program
         {
             if (symbols.ContainsKey(parts[0]))
                 return ConvertStringToBinary(symbols[parts[0]].ToString(), 32);
+            else return ConvertStringToBinary(parts[0], 32);
         }
 
         string op = GetOp(parts[0]);
@@ -99,6 +125,7 @@ class Program
                         string secondArg = GetRegisterNr(parts[2]);
                         binary += ConvertStringToBinary(secondArg, 5);
                         binary += ConvertStringToBinary(parts[1], 22);
+                        return binary;
                     }
                     else
                     {
@@ -111,6 +138,7 @@ class Program
                         {
                             int numberToAdd = (nr - lineNr) / 4;
                             binary += ConvertStringToBinary(numberToAdd.ToString(), 22);
+                            return binary;
                         }
                         else
                         {
@@ -118,6 +146,7 @@ class Program
                             {
                                 int numberToAdd = (symbols[parts[1]] - lineNr) / 4;
                                 binary += ConvertStringToBinary(numberToAdd.ToString(), 22);
+                                return binary;
                             }
                             else
                             {
@@ -136,15 +165,124 @@ class Program
                         int number = symbols[parts[1]] - lineNr;
                         binary += ConvertStringToBinary(number.ToString(), 30);
                     }
+                    return binary;
                 }break;
             case "10":
                 {
-                    string rd, rs1, rs2, simm13, op3;
-                    op3 = GetOp3(parts[0]);     //need a for to loop over tokens
-                    
+                    string rd= "", rs1 = "", rs2 = "", simm13 = "", op3 = "";
+                    op3 = GetOp3(parts[0]);     //need a for to loop over parts
+                    string toAdd = ConvertStringToBinary(GetRegisterNr(parts[parts.Length - 1]), 5);
+                    toAdd += op3;
+                    binary += toAdd;
+                    for (int i=1; i < parts.Length - 1; i++)
+                    {
+                        if (Regex.IsMatch(parts[i], @"\s*\+\s*"))
+                        {
+                           
+                            rs1 = parts[i-1];
+                            simm13 = parts[i+1];
+                            rs1 = GetRegisterNr(rs1);
+                            int nr = 0;
+                            if (symbols.TryGetValue(rs1, out nr)) 
+                                rs1 = ConvertStringToBinary(nr.ToString(), 5);
+                            else 
+                                rs1 = ConvertStringToBinary(rs1, 5);
 
-                }break;
+                            simm13 = GetRegisterNr(simm13);
+                            if (symbols.TryGetValue(simm13, out nr))
+                                simm13 = ConvertStringToBinary(nr.ToString(), 13);
+                            else 
+                                simm13 = ConvertStringToBinary(simm13, 13);
+
+                            break;
+                        }
+
+                        if (Regex.IsMatch(parts[i], @"\[\w*\]"))
+                        {
+                            int nr = 0;
+                            simm13 = GetRegisterNr(parts[i]);
+                            if (symbols.TryGetValue(simm13, out nr))
+                                simm13 = ConvertStringToBinary(nr.ToString(), 13);
+                            else throw new Exception("Error : symbol does not exist");
+                        }
+                        else
+                        {
+                            if (rs1 == "")
+                                rs1 = ConvertStringToBinary(GetRegisterNr(parts[i]), 5);
+                            else if (simm13 == "")
+                                rs2 = ConvertStringToBinary(GetRegisterNr(parts[i]), 5);
+                        }
+                    }
+                    if (rs1 == "")
+                        rs1 = "00000";
+                    if (rs2 == "")
+                        rs2 = "00000";
+                    if (simm13 != "")
+                        binary += rs1 + '1' + simm13;
+                    else binary += rs1 + "000000000" + rs2;
+                    return binary;
+                }
+                break;
+            case "11":
+                {
+                    string rd = "", rs1 = "", rs2 = "", simm13 = "";   // verify if has a + in it
+                    string op3 = GetOp3(parts[0]);
+                    if (parts[0] == "ld")
+                        binary += ConvertStringToBinary(GetRegisterNr(parts[parts.Length - 1]), 5);
+                    else binary += ConvertStringToBinary(GetRegisterNr(parts[1]), 5);
+                    binary += op3;
+
+                    int temp = parts[0] == "ld" ? 1 : 2;
+                    for (int i = temp; i < parts.Length; i++)
+                    {
+                        if (Regex.IsMatch(parts[i], @"\s*\+\s*"))
+                        {
+                            rs1 = Regex.Split(parts[i], @"\s*\+\s*")[0];
+                            simm13 = Regex.Split(parts[i], @"\s*\+\s*")[1];
+                            rs1 = GetRegisterNr(rs1);
+
+                            int nr = 0;
+                            if (symbols.TryGetValue(rs1, out nr))
+                                rs1 = ConvertStringToBinary(nr.ToString(), 5);
+                            else rs1 = ConvertStringToBinary(rs1, 5);
+
+                            simm13 = GetRegisterNr(simm13);
+                            if (symbols.TryGetValue(simm13, out nr))
+                                simm13 = ConvertStringToBinary(nr.ToString(), 13);
+                            else simm13 = ConvertStringToBinary(simm13, 13);
+
+                            break;
+                        }
+
+                        if (Regex.IsMatch(parts[i], @"\[\w*\]"))
+                        {
+                            simm13 = GetRegisterNr(parts[i]);
+                            int nr = 0;
+                            if (symbols.TryGetValue(simm13, out nr))
+                                simm13 = ConvertStringToBinary(nr.ToString(), 13);
+                            else throw new Exception("Error : Symbol not found");
+                        }
+                        else
+                        {
+                            if (rs1 == "")
+                                rs1 = ConvertStringToBinary(GetRegisterNr(parts[i]), 5);
+                            else if (simm13 == "")
+                                rs2 = ConvertStringToBinary(GetRegisterNr(parts[i]), 5);
+                        }
+                    }
+
+                    if (rs1 == "") rs1 = "00000";
+                    if (rs2 == "") rs2 = "00000";
+
+                    if (simm13 != "")
+                        binary += rs1 + '1' + simm13;
+                    else
+                        binary += rs1 + "000000000" + rs2;
+                    return binary;
+                }
+                break;
         }
+
         return "-1";
     }
 
@@ -166,8 +304,7 @@ class Program
     }
     private static string GetRegisterNr(string v)
     {
-        v = Regex.Replace(v, @"\[]/|\%r", "");
-        Console.WriteLine(v);
+        v = Regex.Replace(v, @"\[|\]|%r", "");
         return v;
     }
 
@@ -235,7 +372,7 @@ class Program
                 return "010110";
             case "srl":
                 return "100110";
-            case "jmlp":
+            case "jmpl":
                 return "111000";
         }
         return "";

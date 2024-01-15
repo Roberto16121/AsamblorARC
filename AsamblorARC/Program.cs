@@ -29,6 +29,11 @@ class Program
                     if (line.Contains(':'))
                     {
                         string[] tokens = line.Split(':', StringSplitOptions.RemoveEmptyEntries);
+                        if (tokens[0] == "main" || tokens[0] == "progl")
+                        {
+                            locationStart += 4;
+                            continue;
+                        }
                         symbols.Add(tokens[0], locationStart);
                     }
                     locationStart += 4;
@@ -65,7 +70,7 @@ class Program
                 string[] parts = regex.Split(line).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
                 string binaryCode = ConvertToBinary(parts, code.number);  
                 writer.WriteLine(AddSpaceToBinary(binaryCode));
-                
+
             }
             else
             {
@@ -169,7 +174,7 @@ class Program
                 }break;
             case "10":
                 {
-                    string rd= "", rs1 = "", rs2 = "", simm13 = "", op3 = "";
+                    string rs1 = "", rs2 = "", simm13 = "", op3 = "";
                     op3 = GetOp3(parts[0]);     //need a for to loop over parts
                     string toAdd = ConvertStringToBinary(GetRegisterNr(parts[parts.Length - 1]), 5);
                     toAdd += op3;
@@ -225,7 +230,7 @@ class Program
                 break;
             case "11":
                 {
-                    string rd = "", rs1 = "", rs2 = "", simm13 = "";   // verify if has a + in it
+                    string rs1 = "", rs2 = "", simm13 = "";   // verify if has a + in it
                     string op3 = GetOp3(parts[0]);
                     if (parts[0] == "ld")
                         binary += ConvertStringToBinary(GetRegisterNr(parts[parts.Length - 1]), 5);
@@ -266,8 +271,6 @@ class Program
                         {
                             if (rs1 == "")
                                 rs1 = ConvertStringToBinary(GetRegisterNr(parts[i]), 5);
-                            else if (simm13 == "")
-                                rs2 = ConvertStringToBinary(GetRegisterNr(parts[i]), 5);
                         }
                     }
 
@@ -275,7 +278,7 @@ class Program
                     if (rs2 == "") rs2 = "00000";
 
                     if (simm13 != "")
-                        binary += rs1 + '1' + simm13;
+                        binary += rs2 + '1' + simm13;
                     else
                         binary += rs1 + "000000000" + rs2;
                     return binary;

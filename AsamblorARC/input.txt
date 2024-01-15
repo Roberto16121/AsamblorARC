@@ -1,6 +1,6 @@
 ﻿! This program adds 2 numbers
 		.begin
-		.org 2024
+		.org 2048
 progl:	ld		[x],	%r1
 		ld		[y],	%r2
 		addcc	%r1,	%r2,	%r3
